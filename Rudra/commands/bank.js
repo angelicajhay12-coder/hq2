@@ -16,10 +16,10 @@ module.exports.config = {
 const BOT_ADMINS = ["61559999326713"];
 
 // Helper function to fetch username by UID
-async function getUserName(uid, Users) {
+async function getUserName(uid, api) {
   try {
-    const name = await Users.getNameUser(uid);
-    return name || uid; // Default to UID if no name found
+    const userInfo = await api.getUserInfo(uid);
+    return userInfo[uid]?.name || uid; // Default to UID if no name found
   } catch {
     return uid; // Fallback if an error occurs
   }
@@ -30,7 +30,7 @@ function formatBalance(user, balance) {
   return `🏦 Bank Account 🏦\n\n👤 ${user}\n💰 Balance: ${balance.toLocaleString()} coins`;
 }
 
-module.exports.run = async ({ api, event, args, Users }) => {
+module.exports.run = async ({ api, event, args }) => {
   const { threadID, senderID, messageID } = event;
   const command = args[0] ? args[0].toLowerCase() : "";
 
@@ -41,7 +41,7 @@ module.exports.run = async ({ api, event, args, Users }) => {
 
     // Loop through all accounts, fetch username and update DB
     for (let uid in allData) {
-      let name = await getUserName(uid, Users);
+      let name = await getUserName(uid, api);
 
       // Update name in DB if it's different from the one stored
       if (allData[uid].name !== name) {
@@ -87,7 +87,7 @@ module.exports.run = async ({ api, event, args, Users }) => {
     // Fetch username and current balance from DB
     let userData = (await getData(`bank/${targetUID}`)) || {
       uid: targetUID,
-      name: await getUserName(targetUID, Users),
+      name: await getUserName(targetUID, api),
       balance: 0
     };
 
@@ -95,7 +95,7 @@ module.exports.run = async ({ api, event, args, Users }) => {
     userData.balance += amount;
 
     // Update username if necessary
-    let freshName = await getUserName(targetUID, Users);
+    let freshName = await getUserName(targetUID, api);
     if (userData.name !== freshName) {
       userData.name = freshName;
     }
@@ -112,12 +112,12 @@ module.exports.run = async ({ api, event, args, Users }) => {
   // ✅ when the command is just /bank (check own balance)
   let userData = (await getData(`bank/${senderID}`)) || {
     uid: senderID,
-    name: await getUserName(senderID, Users),
+    name: await getUserName(senderID, api),
     balance: 0
   };
 
   // Fetch latest username if changed
-  let freshName = await getUserName(senderID, Users);
+  let freshName = await getUserName(senderID, api);
   if (userData.name !== freshName) {
     userData.name = freshName;
     await setData(`bank/${senderID}`, userData); // Save updated name
