@@ -9,7 +9,7 @@ module.exports.config = {
   description: "Bank system with UID checker (auto-update name on /bank)",
   usages: "/bank, /bank all, /bank add <uid> <amount>",
   commandCategory: "economy",
-  cooldowns: 3,
+  cooldowns: 3
 };
 
 // 🔑 Bot admins
@@ -39,14 +39,14 @@ module.exports.run = async ({ api, event, args, Users }) => {
     let allData = (await getData(`bank`)) || {};
     let results = [];
 
+    // Loop through all accounts, fetch username and update DB
     for (let uid in allData) {
-      // Fetch username first
       let name = await getUserName(uid, Users);
 
-      // Auto-update name in DB if it differs
+      // Update name in DB if it's different from the one stored
       if (allData[uid].name !== name) {
         allData[uid].name = name;
-        await setData(`bank/${uid}`, allData[uid]); // Save updated name
+        await setData(`bank/${uid}`, allData[uid]);
       }
 
       results.push({
