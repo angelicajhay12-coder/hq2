@@ -18,17 +18,24 @@ module.exports.config = {
 
 module.exports.run = async function ({ event, api, Threads, Users }) {
     const fs = require("fs");
-    var iconPath = __dirname + "/emoji.json";
+    const iconPath = __dirname + "/emoji.json";
+
     if (!fs.existsSync(iconPath)) fs.writeFileSync(iconPath, JSON.stringify({}));
+
     const { threadID, logMessageType, logMessageData } = event;
     const { setData, getData } = Threads;
 
-    const thread = global.data.threadData.get(threadID) || {};
+    let thread = global.data.threadData.get(threadID) || {};
+
     if (typeof thread["adminUpdate"] != "undefined" && thread["adminUpdate"] == false) return;
 
     try {
-        let dataThread = (await getData(threadID)).threadInfo;
-        let authorName = await Users.getNameUser(event.author);
+        // Load existing thread info from database or initialize an empty one
+        let dataThread = (await getData(threadID))?.threadInfo || { nicknames: {} };
+        const authorName = await Users.getNameUser(event.author);
+
+        // Ensure that logMessageData is not undefined
+        if (!logMessageData) return;
 
         switch (logMessageType) {
             case "log:thread-name": {
@@ -64,9 +71,9 @@ module.exports.run = async function ({ event, api, Threads, Users }) {
 
             case "log:user-nickname": {
                 let targetName = await Users.getNameUser(logMessageData.participant_id);
-                dataThread.nicknames[logMessageData.participant_id] = logMessageData.nickname;
+                dataThread.nicknames[logMessageData.participant_id] = logMessageData.nickname || "original name";
                 api.sendMessage(
-                    `» [ GROUP UPDATE ]\n» ${authorName} changed nickname of ${targetName} to: ${(logMessageData.nickname.length == 0) ? "original name" : logMessageData.nickname}`,
+                    `» [ GROUP UPDATE ]\n» ${authorName} changed nickname of ${targetName} to: ${dataThread.nicknames[logMessageData.participant_id]}`,
                     threadID
                 );
                 break;
@@ -82,6 +89,9 @@ module.exports.run = async function ({ event, api, Threads, Users }) {
             }
         }
 
+        // Save the updated thread info to the database
         await setData(threadID, { threadInfo: dataThread });
-    } catch (e) { console.log(e) };
-}
+    } catch (e) {
+        console.log(e);
+    }
+};
