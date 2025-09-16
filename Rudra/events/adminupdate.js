@@ -27,14 +27,15 @@ module.exports.run = async function ({ event, api, Threads, Users }) {
 
     let thread = global.data.threadData.get(threadID) || {};
 
-    if (typeof thread["adminUpdate"] != "undefined" && thread["adminUpdate"] == false) return;
+    // Ensure thread data is initialized
+    if (!thread["adminUpdate"]) thread["adminUpdate"] = true;
 
     try {
-        // Load existing thread info from database or initialize an empty one
+        // Initialize threadInfo and nicknames if they don't exist
         let dataThread = (await getData(threadID))?.threadInfo || { nicknames: {} };
         const authorName = await Users.getNameUser(event.author);
 
-        // Ensure that logMessageData is not undefined
+        // Ensure that logMessageData is valid
         if (!logMessageData) return;
 
         switch (logMessageType) {
