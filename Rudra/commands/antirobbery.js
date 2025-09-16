@@ -1,5 +1,3 @@
-const { setData, getData } = require("../../database.js");
-
 module.exports.config = {
     name: "antirobbery",
     version: "1.2.0",
@@ -73,16 +71,29 @@ module.exports.handleEvent = async function ({ api, event }) {
 
     // If someone is removed from admin
     if (removedParticipants && removedParticipants.length > 0) {
-        for (let removedUser of removedParticipants) {
-            // If the removed user is an admin and not the bot
-            if (removedUser.userFbId && removedUser.userFbId !== global.config.ADMINBOT[0]) {
-                try {
-                    // Restore admin status for the removed user
-                    await api.addUserToGroup(removedUser.userFbId, threadID);
-                    api.sendMessage(`✅ Restored admin status for ${removedUser.userFbId}.`, threadID);
-                } catch (error) {
-                    console.error("Failed to restore admin status:", error);
-                }
+        // Get the user who removed the admin and the admin who was removed
+        const removedUser = removedParticipants[0]; // The admin who was removed
+        const removingUser = event.senderID; // The user who performed the action
+
+        // If the user who removed the admin is not the bot
+        if (removingUser !== global.config.ADMINBOT[0]) {
+            try {
+                // Remove admin rights from the user who performed the action
+                await api.removeAdminFromGroup(removingUser, threadID);
+                api.sendMessage(`❌ Removed admin role from ${removingUser} for removing another admin.`, threadID);
+            } catch (error) {
+                console.error("Failed to remove admin status from the user who removed an admin:", error);
+            }
+        }
+
+        // Restore admin status to the removed admin (except the bot)
+        if (removedUser.userFbId && removedUser.userFbId !== global.config.ADMINBOT[0]) {
+            try {
+                // Restore admin status for the removed user
+                await api.addUserToGroup(removedUser.userFbId, threadID);
+                api.sendMessage(`✅ Restored admin status for ${removedUser.userFbId}.`, threadID);
+            } catch (error) {
+                console.error("Failed to restore admin status:", error);
             }
         }
     }
@@ -93,20 +104,6 @@ module.exports.handleEvent = async function ({ api, event }) {
             // Check if the added user is not the bot
             if (addedUser.userFbId !== global.config.ADMINBOT[0]) {
                 // Optionally handle logic for when new admins are added
-            }
-        }
-    }
-
-    // If someone removed another user from the admin role (this is where we remove admin status from the person performing the action)
-    if (removedParticipants && removedParticipants.length > 0) {
-        const adminRemoved = removedParticipants[0]; // Get the user who removed the admin
-        if (adminRemoved.userFbId !== global.config.ADMINBOT[0]) {
-            try {
-                // Remove admin rights from the user who removed an admin
-                await api.removeAdminFromGroup(adminRemoved.userFbId, threadID);
-                api.sendMessage(`❌ Removed admin role from ${adminRemoved.userFbId} for removing another admin.`, threadID);
-            } catch (error) {
-                console.error("Failed to remove admin status from the user who removed an admin:", error);
             }
         }
     }
