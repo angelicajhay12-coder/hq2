@@ -17,7 +17,7 @@ module.exports.config = {
 };
 
 module.exports.handleEvent = async function ({ event, api, Users }) {
-  let { messageID, senderID, threadID, body: content } = event;
+  let { messageID, senderID, threadID, body: content, attachments } = event;
 
   if (!global.logMessage) global.logMessage = new Map();
   if (!global.data.botID) global.data.botID = api.getCurrentUserID();
@@ -33,11 +33,11 @@ module.exports.handleEvent = async function ({ event, api, Users }) {
     global.data.userName.set(senderID, name);
   }
 
-  // Save message (non-unsend)
+  // Save message (non-unsend) only if it contains text (not an attachment)
   if (event.type !== "message_unsend") {
     global.logMessage.set(messageID, {
       msgBody: content,
-      attachment: event.attachments || [],
+      attachment: attachments || [],
       senderName: name,
     });
   }
@@ -49,6 +49,7 @@ module.exports.handleEvent = async function ({ event, api, Users }) {
 
     const senderName = getMsg.senderName || "Friend";
 
+    // If the message contains text only (no attachments)
     if (!getMsg.attachment || getMsg.attachment.length === 0) {
       return api.sendMessage(
         `${senderName} unsent a message.\n\nContent: ${getMsg.msgBody}`,
@@ -56,6 +57,7 @@ module.exports.handleEvent = async function ({ event, api, Users }) {
         null
       );
     } else {
+      // If the message contains attachments
       let num = 0;
       let msg = {
         body: `${senderName} unsent a message.\n${getMsg.attachment.length} Attachment(s)${
