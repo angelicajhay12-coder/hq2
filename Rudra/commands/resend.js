@@ -1,93 +1,109 @@
-const axios = require("axios");
-const fs = require("fs-extra");
-const path = require("path");
-
-// 🔹 Storage of all messages
-if (!global.logMessage) global.logMessage = new Map();
+const fs = global.nodemodule["fs-extra"];
+const axios = global.nodemodule["axios"];
+const request = global.nodemodule["request"];
 
 module.exports.config = {
   name: "resend",
-  version: "1.0.1",
-  hasPermission: 0,
-  credits: "ChatGPT",
-  description: "Resend message when user unsends",
-  commandCategory: "system",
-  usages: "",
+  version: "2.1.0",
+  hasPermssion: 1,
+  credits: "Thọ & Mod By DuyVuong + ChatGPT",
+  description: "Resends Messages with sender name",
+  usePrefix: true,
+  commandCategory: "general",
+  usages: "resend",
   cooldowns: 0,
+  hide: true,
+  dependencies: { request: "", "fs-extra": "", axios: "" },
 };
 
-module.exports.handleEvent = async ({ api, event }) => {
-  const { threadID, messageID, type, body, attachments, senderID } = event;
+module.exports.handleEvent = async function ({ event, api, Users }) {
+  let { messageID, senderID, threadID, body: content } = event;
 
-  // 🔹 Log every message (text or with attachment)
-  if (type === "message") {
-    try {
-      const senderInfo = await api.getUserInfo(senderID);
-      const senderName = senderInfo[senderID]?.name || "Unknown";
+  if (!global.logMessage) global.logMessage = new Map();
+  if (!global.data.botID) global.data.botID = api.getCurrentUserID();
 
-      global.logMessage.set(messageID, {
-        senderID,
-        senderName,
-        msgBody: body,
-        attachments: attachments || [],
-      });
-    } catch (e) {
-      console.error("❌ Error getting user info:", e);
-    }
+  // Skip messages from bot itself
+  if (senderID == global.data.botID) return;
+
+  // Fetch username (with cache)
+  let name = global.data.userName.get(senderID);
+  if (!name) {
+    const userInfo = await api.getUserInfo(senderID);
+    name = Object.values(userInfo)[0]?.name || "Friend";
+    global.data.userName.set(senderID, name);
   }
 
-  // 🔹 Handle unsend
-  if (type === "message_unsend") {
+  // Save message (non-unsend)
+  if (event.type !== "message_unsend") {
+    global.logMessage.set(messageID, {
+      msgBody: content,
+      attachment: event.attachments || [],
+      senderName: name,
+    });
+  }
+
+  // Handle unsend
+  if (event.type === "message_unsend") {
     const getMsg = global.logMessage.get(messageID);
     if (!getMsg) return;
 
     const senderName = getMsg.senderName || "Friend";
-    const senderUID = getMsg.senderID;
-    const oldAttachments = Array.isArray(getMsg.attachments) ? getMsg.attachments : [];
 
-    if (oldAttachments.length === 0) {
+    if (!getMsg.attachment || getMsg.attachment.length === 0) {
       return api.sendMessage(
-        `${senderName} unsent a message.\n\nContent: ${getMsg.msgBody || "No text"}`,
-        threadID
+        `${senderName} unsent a message.\n\nContent: ${getMsg.msgBody}`,
+        threadID,
+        null
       );
     } else {
       let num = 0;
       let msg = {
-        body: `${senderName} unsent a message.\n${oldAttachments.length} Attachment(s)${
+        body: `${senderName} unsent a message.\n${getMsg.attachment.length} Attachment(s)${
           getMsg.msgBody ? `\n\nContent: ${getMsg.msgBody}` : ""
         }`,
         attachment: [],
-        mentions: [{ tag: senderName, id: senderUID, fromIndex: 0 }],
+        mentions: [{ tag: senderName, id: senderID, fromIndex: 0 }],
       };
 
-      for (let i of oldAttachments) {
-        try {
-          num += 1;
-          if (!i || !i.url) continue;
-
-          const url = i.url;
-          const ext = url.split(".").pop().split("?")[0] || "jpg";
-
-          const cacheDir = path.join(__dirname, "cache");
-          if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
-
-          const pathFile = path.join(cacheDir, `resend_${Date.now()}_${num}.${ext}`);
-          const data = (await axios.get(url, { responseType: "arraybuffer" })).data;
-
-          fs.writeFileSync(pathFile, Buffer.from(data, "binary"));
-          msg.attachment.push(fs.createReadStream(pathFile));
-
-          msg.attachment[msg.attachment.length - 1].on("close", () => {
-            if (fs.existsSync(pathFile)) fs.unlinkSync(pathFile);
-          });
-        } catch (e) {
-          console.error("❌ Error downloading attachment:", e);
-        }
+      for (let i of getMsg.attachment) {
+        num += 1;
+        const getURL = await request.get(i.url);
+        const pathname = getURL.uri.pathname;
+        const ext = pathname.substring(pathname.lastIndexOf(".") + 1);
+        const pathFile = __dirname + `/cache/${num}.${ext}`;
+        const data = (await axios.get(i.url, { responseType: "arraybuffer" })).data;
+        fs.writeFileSync(pathFile, Buffer.from(data, "binary"));
+        msg.attachment.push(fs.createReadStream(pathFile));
       }
 
       api.sendMessage(msg, threadID, (err) => {
         if (err) console.error("❌ Error sending resend message:", err);
+        // Clean up the files after sending
+        for (let i = 0; i < msg.attachment.length; i++) {
+          const file = msg.attachment[i];
+          file.on("close", () => {
+            if (fs.existsSync(pathFile)) fs.unlinkSync(pathFile);
+          });
+        }
       });
     }
   }
+};
+
+module.exports.run = async function ({ api, event, Threads }) {
+  const { threadID, messageID } = event;
+
+  const data = (await Threads.getData(threadID)).data;
+
+  if (typeof data["resend"] === "undefined" || data["resend"] === false) data["resend"] = true;
+  else data["resend"] = false;
+
+  await Threads.setData(parseInt(threadID), { data });
+  global.data.threadData.set(parseInt(threadID), data);
+
+  return api.sendMessage(
+    `Resend feature is now ${data["resend"] ? "ON ✅" : "OFF ❌"} successfully!`,
+    threadID,
+    messageID
+  );
 };
