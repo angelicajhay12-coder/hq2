@@ -1,7 +1,7 @@
 module.exports.config = {
     name: "adminUpdate",
     eventType: [
-        "log:thread-admins",  // Listen to admin changes
+        "log:thread-admins", // Monitor admin changes
         "log:thread-name",
         "log:user-nickname",
         "log:thread-icon",
@@ -21,90 +21,118 @@ module.exports.run = async function ({ event, api, Threads, Users }) {
     const iconPath = __dirname + "/emoji.json";
 
     if (!fs.existsSync(iconPath)) fs.writeFileSync(iconPath, JSON.stringify({}));
-
     const { threadID, logMessageType, logMessageData } = event;
     const { setData, getData } = Threads;
 
-    let thread = global.data.threadData.get(threadID) || {};
-
-    // Ensure thread data is initialized
-    if (!thread["adminUpdate"]) thread["adminUpdate"] = true;
+    const thread = global.data.threadData.get(threadID) || {};
+    if (typeof thread["adminUpdate"] != "undefined" && thread["adminUpdate"] == false) return;
 
     try {
-        // Initialize threadInfo and nicknames if they don't exist
         let dataThread = (await getData(threadID))?.threadInfo || { nicknames: {} };
-        const authorName = await Users.getNameUser(event.author);
-
-        // Ensure that logMessageData is valid
-        if (!logMessageData) return;
 
         switch (logMessageType) {
-            case "log:thread-name": {
-                dataThread.threadName = logMessageData.name || "No name";
-                api.sendMessage(
-                    `» [ GROUP UPDATE ]\n» ${authorName} changed group name to: ${dataThread.threadName}`,
-                    threadID
-                );
+            // Handling admin changes (added or removed)
+            case "log:thread-admins": {
+                if (logMessageData.ADMIN_EVENT == "add_admin") {
+                    // Admin added
+                    dataThread.adminIDs.push({ id: logMessageData.TARGET_ID });
+                    if (global.configModule[this.config.name].sendNoti) {
+                        api.sendMessage(
+                            `»» NOTICE «« User ${logMessageData.TARGET_ID} has been promoted to admin ✅`,
+                            threadID, async (error, info) => {
+                                if (global.configModule[this.config.name].autoUnsend) {
+                                    await new Promise(resolve => setTimeout(resolve, global.configModule[this.config.name].timeToUnsend * 1000));
+                                    return api.unsendMessage(info.messageID);
+                                }
+                            }
+                        );
+                    }
+                } else if (logMessageData.ADMIN_EVENT == "remove_admin") {
+                    // Admin removed
+                    dataThread.adminIDs = dataThread.adminIDs.filter(item => item.id != logMessageData.TARGET_ID);
+                    if (global.configModule[this.config.name].sendNoti) {
+                        api.sendMessage(
+                            `»» NOTICE «« User ${logMessageData.TARGET_ID} has been removed from admin ❌`,
+                            threadID, async (error, info) => {
+                                if (global.configModule[this.config.name].autoUnsend) {
+                                    await new Promise(resolve => setTimeout(resolve, global.configModule[this.config.name].timeToUnsend * 1000));
+                                    return api.unsendMessage(info.messageID);
+                                }
+                            }
+                        );
+                    }
+                }
                 break;
             }
 
+            // Handling thread icon update
             case "log:thread-icon": {
                 let preIcon = JSON.parse(fs.readFileSync(iconPath));
                 dataThread.threadIcon = logMessageData.thread_icon || "👍";
-                api.sendMessage(
-                    `» [ GROUP UPDATE ]\n» ${authorName} changed group icon\n» Previous icon: ${preIcon[threadID] || "unknown"}`,
-                    threadID, () => {
-                        preIcon[threadID] = dataThread.threadIcon;
-                        fs.writeFileSync(iconPath, JSON.stringify(preIcon));
-                    }
-                );
+                if (global.configModule[this.config.name].sendNoti) {
+                    api.sendMessage(
+                        `» [ GROUP UPDATE ]\n» Group icon changed\n» Previous icon: ${preIcon[threadID] || "unknown"}`,
+                        threadID, async (error, info) => {
+                            preIcon[threadID] = dataThread.threadIcon;
+                            fs.writeFileSync(iconPath, JSON.stringify(preIcon));
+                            if (global.configModule[this.config.name].autoUnsend) {
+                                await new Promise(resolve => setTimeout(resolve, global.configModule[this.config.name].timeToUnsend * 1000));
+                                return api.unsendMessage(info.messageID);
+                            }
+                        }
+                    );
+                }
                 break;
             }
 
+            // Handling thread color update
             case "log:thread-color": {
                 dataThread.threadColor = logMessageData.thread_color || "🌤";
-                api.sendMessage(
-                    `» [ GROUP UPDATE ]\n» ${authorName} changed group color`,
-                    threadID
-                );
+                if (global.configModule[this.config.name].sendNoti) {
+                    api.sendMessage(
+                        `» [ GROUP UPDATE ]\n» Group color changed`,
+                        threadID, async (error, info) => {
+                            if (global.configModule[this.config.name].autoUnsend) {
+                                await new Promise(resolve => setTimeout(resolve, global.configModule[this.config.name].timeToUnsend * 1000));
+                                return api.unsendMessage(info.messageID);
+                            }
+                        }
+                    );
+                }
                 break;
             }
 
+            // Handling nickname update
             case "log:user-nickname": {
-                let targetName = await Users.getNameUser(logMessageData.participant_id);
-                dataThread.nicknames[logMessageData.participant_id] = logMessageData.nickname || "original name";
-                api.sendMessage(
-                    `» [ GROUP UPDATE ]\n» ${authorName} changed nickname of ${targetName} to: ${dataThread.nicknames[logMessageData.participant_id]}`,
-                    threadID
-                );
+                dataThread.nicknames[logMessageData.participant_id] = logMessageData.nickname;
+                if (global.configModule[this.config.name].sendNoti) {
+                    api.sendMessage(
+                        `»» NOTICE «« User ${logMessageData.participant_id} changed nickname to: ${(logMessageData.nickname.length == 0) ? "original name" : logMessageData.nickname}`,
+                        threadID, async (error, info) => {
+                            if (global.configModule[this.config.name].autoUnsend) {
+                                await new Promise(resolve => setTimeout(resolve, global.configModule[this.config.name].timeToUnsend * 1000));
+                                return api.unsendMessage(info.messageID);
+                            }
+                        }
+                    );
+                }
                 break;
             }
 
-            case "log:magic-emoji": { // quick reaction
-                let newReaction = logMessageData.reaction || "❓";
-                api.sendMessage(
-                    `» [ GROUP UPDATE ]\n» ${authorName} changed the quick reaction to: ${newReaction}`,
-                    threadID
-                );
-                break;
-            }
-
-            // Handle admin changes: added or removed
-            case "log:thread-admins": {
-                const adminChanges = logMessageData;
-                let message = `» [ ADMIN UPDATE ]\n`;
-
-                if (adminChanges.added) {
-                    const addedAdmins = adminChanges.added.map(id => Users.getNameUser(id));
-                    message += `» New admins: ${addedAdmins.join(", ")}`;
+            // Handling thread name update
+            case "log:thread-name": {
+                dataThread.threadName = logMessageData.name || "No name";
+                if (global.configModule[this.config.name].sendNoti) {
+                    api.sendMessage(
+                        `»» NOTICE «« The group name has been updated to: ${dataThread.threadName}`,
+                        threadID, async (error, info) => {
+                            if (global.configModule[this.config.name].autoUnsend) {
+                                await new Promise(resolve => setTimeout(resolve, global.configModule[this.config.name].timeToUnsend * 1000));
+                                return api.unsendMessage(info.messageID);
+                            }
+                        }
+                    );
                 }
-
-                if (adminChanges.removed) {
-                    const removedAdmins = adminChanges.removed.map(id => Users.getNameUser(id));
-                    message += `\n» Removed admins: ${removedAdmins.join(", ")}`;
-                }
-
-                api.sendMessage(message, threadID);
                 break;
             }
         }
