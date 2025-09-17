@@ -17,7 +17,7 @@ module.exports.config = {
 module.exports.run = async function ({ api, event, args, Users }) {
   const { threadID, senderID } = event;
 
-  // ✅ Load player balance from DB
+  // ✅ Fetch user balance from the database (bank account)
   let userBank = (await getData(`/bank/${senderID}`)) || { balance: 0 };
 
   const bet = parseInt(args[0]);
@@ -29,10 +29,10 @@ module.exports.run = async function ({ api, event, args, Users }) {
     return api.sendMessage("⚠️ You don't have enough coins!", threadID);
   }
 
-  // Deduct bet
+  // Deduct the bet from the balance
   userBank.balance -= bet;
 
-  // Roll slots
+  // Roll the slot machine
   const roll = [
     symbols[Math.floor(Math.random() * symbols.length)],
     symbols[Math.floor(Math.random() * symbols.length)],
@@ -41,7 +41,7 @@ module.exports.run = async function ({ api, event, args, Users }) {
 
   let resultMsg = `🎰 SLOT MACHINE 🎰\n[ ${roll.join(" | ")} ]\n\n`;
 
-  // Check winnings
+  // Check the result and calculate winnings
   if (roll[0] === roll[1] && roll[1] === roll[2]) {
     const win = bet * 5;
     userBank.balance += win;
@@ -51,19 +51,20 @@ module.exports.run = async function ({ api, event, args, Users }) {
     userBank.balance += win;
     resultMsg += `✅ 2 matches! You won 💰 ${win.toLocaleString()} coins.`;
   } else {
-    resultMsg += `❌ You lost your bet of ${bet.toLocaleString()} coins.`;
+    resultMsg += `❌ You lost your bet of 💰 ${bet.toLocaleString()}.`;
   }
 
-  // ✅ Fetch and update player name in the database
-  const name = await Users.getNameUser(senderID);
+  // Fetch username for the player (this part was missing in your original code)
+  let userName = await Users.getNameUser(senderID);
 
-  // Save updated balance + name to DB
+  // Update the balance and name in the database
   await setData(`/bank/${senderID}`, {
     balance: userBank.balance,
-    name // Save name to the database
+    name: userName, // Save the username in the database
   });
 
-  resultMsg += `\n\n👤 ${name}\n💳 Balance: ${userBank.balance.toLocaleString()} coins`;
+  // Add the final balance to the result message
+  resultMsg += `\n\n👤 ${userName}\n💳 Balance: ${userBank.balance.toLocaleString()} coins`;
 
   return api.sendMessage(resultMsg, threadID);
 };
