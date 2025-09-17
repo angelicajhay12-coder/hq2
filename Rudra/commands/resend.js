@@ -67,20 +67,30 @@ module.exports.handleEvent = async function ({ event, api, Users }) {
 
       for (let i of getMsg.attachment) {
         num += 1;
-        const getURL = await request.get(i.url);
-        const pathname = getURL.uri.pathname;
-        const ext = pathname.substring(pathname.lastIndexOf(".") + 1);
-        const pathFile = __dirname + `/cache/${num}.${ext}`;
-        const data = (await axios.get(i.url, { responseType: "arraybuffer" })).data;
-        fs.writeFileSync(pathFile, Buffer.from(data, "binary"));
-        msg.attachment.push(fs.createReadStream(pathFile));
+        const url = i.url;
 
-        // Clean up the files after sending
-        msg.attachment[msg.attachment.length - 1].on("close", () => {
-          if (fs.existsSync(pathFile)) fs.unlinkSync(pathFile);
-        });
+        // Download the attachment (photo, file, etc.)
+        const extension = url.split('.').pop();
+        const pathFile = `${__dirname}/cache/resend_${num}.${extension}`;
+
+        try {
+          // Request the attachment from the URL
+          const response = await axios.get(url, { responseType: "arraybuffer" });
+          fs.writeFileSync(pathFile, response.data);
+
+          // Add the attachment to the message
+          msg.attachment.push(fs.createReadStream(pathFile));
+
+          // Delete the file after sending
+          msg.attachment[msg.attachment.length - 1].on("close", () => {
+            if (fs.existsSync(pathFile)) fs.unlinkSync(pathFile);
+          });
+        } catch (error) {
+          console.error("❌ Error downloading attachment:", error);
+        }
       }
 
+      // Send the message with attachment
       api.sendMessage(msg, threadID, (err) => {
         if (err) console.error("❌ Error sending resend message:", err);
       });
