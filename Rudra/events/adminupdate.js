@@ -1,7 +1,7 @@
 module.exports.config = {
     name: "adminUpdate",
     eventType: [
-        "log:thread-admins",
+        "log:thread-admins",  // Listen to admin changes
         "log:thread-name",
         "log:user-nickname",
         "log:thread-icon",
@@ -86,6 +86,25 @@ module.exports.run = async function ({ event, api, Threads, Users }) {
                     `» [ GROUP UPDATE ]\n» ${authorName} changed the quick reaction to: ${newReaction}`,
                     threadID
                 );
+                break;
+            }
+
+            // Handle admin changes: added or removed
+            case "log:thread-admins": {
+                const adminChanges = logMessageData;
+                let message = `» [ ADMIN UPDATE ]\n`;
+
+                if (adminChanges.added) {
+                    const addedAdmins = adminChanges.added.map(id => Users.getNameUser(id));
+                    message += `» New admins: ${addedAdmins.join(", ")}`;
+                }
+
+                if (adminChanges.removed) {
+                    const removedAdmins = adminChanges.removed.map(id => Users.getNameUser(id));
+                    message += `\n» Removed admins: ${removedAdmins.join(", ")}`;
+                }
+
+                api.sendMessage(message, threadID);
                 break;
             }
         }
