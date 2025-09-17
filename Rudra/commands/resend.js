@@ -2,13 +2,13 @@ const axios = require("axios");
 const fs = require("fs-extra");
 const path = require("path");
 
-// 🔹 Storage ng lahat ng messages
+// 🔹 Storage of all messages
 if (!global.logMessage) global.logMessage = new Map();
 
 module.exports.config = {
   name: "resend",
   version: "1.0.1",
-  hasPermssion: 0,
+  hasPermission: 0,
   credits: "ChatGPT",
   description: "Resend message when user unsends",
   commandCategory: "system",
