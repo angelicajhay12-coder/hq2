@@ -74,17 +74,15 @@ module.exports.handleEvent = async function ({ event, api, Users }) {
         const data = (await axios.get(i.url, { responseType: "arraybuffer" })).data;
         fs.writeFileSync(pathFile, Buffer.from(data, "binary"));
         msg.attachment.push(fs.createReadStream(pathFile));
+
+        // Clean up the files after sending
+        msg.attachment[msg.attachment.length - 1].on("close", () => {
+          if (fs.existsSync(pathFile)) fs.unlinkSync(pathFile);
+        });
       }
 
       api.sendMessage(msg, threadID, (err) => {
         if (err) console.error("❌ Error sending resend message:", err);
-        // Clean up the files after sending
-        for (let i = 0; i < msg.attachment.length; i++) {
-          const file = msg.attachment[i];
-          file.on("close", () => {
-            if (fs.existsSync(pathFile)) fs.unlinkSync(pathFile);
-          });
-        }
       });
     }
   }
