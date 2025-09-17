@@ -1,4 +1,3 @@
-// === modules/commands/slot.js ===
 const { getData, setData } = require("../../database.js");
 
 // Slot symbols
@@ -55,11 +54,13 @@ module.exports.run = async function ({ api, event, args, Users }) {
     resultMsg += `❌ You lost your bet of ${bet.toLocaleString()} coins.`;
   }
 
-  // ✅ Save updated balance + name to DB
+  // ✅ Fetch and update player name in the database
   const name = await Users.getNameUser(senderID);
+
+  // Save updated balance + name to DB
   await setData(`/bank/${senderID}`, {
     balance: userBank.balance,
-    name
+    name // Save name to the database
   });
 
   resultMsg += `\n\n👤 ${name}\n💳 Balance: ${userBank.balance.toLocaleString()} coins`;
